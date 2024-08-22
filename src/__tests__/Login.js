@@ -68,7 +68,6 @@ describe("Given that I am a user on login page", () => {
 
       const form = screen.getByTestId("form-employee");
 
-      // localStorage should be populated with form data
       Object.defineProperty(window, "localStorage", {
         value: {
           getItem: jest.fn(() => null),
@@ -77,7 +76,6 @@ describe("Given that I am a user on login page", () => {
         writable: true,
       });
 
-      // we have to mock navigation to test it
       const onNavigate = (pathname) => {
         document.body.innerHTML = ROUTES({ pathname });
       };
@@ -180,7 +178,6 @@ describe("Given that I am a user on login page", () => {
 
       const form = screen.getByTestId("form-admin");
 
-      // localStorage should be populated with form data
       Object.defineProperty(window, "localStorage", {
         value: {
           getItem: jest.fn(() => null),
@@ -189,7 +186,6 @@ describe("Given that I am a user on login page", () => {
         writable: true,
       });
 
-      // we have to mock navigation to test it
       const onNavigate = (pathname) => {
         document.body.innerHTML = ROUTES({ pathname });
       };
@@ -226,5 +222,72 @@ describe("Given that I am a user on login page", () => {
     test("It should renders HR dashboard page", () => {
       expect(screen.queryByText("Validations")).toBeTruthy();
     });
+  });
+});
+
+// Tests supplémentaires pour couvrir les cas non couverts
+describe("Additional tests for Login", () => {
+  test("handleSubmitEmployee should not crash if form elements are missing", () => {
+    const login = new Login({
+      document: { querySelector: () => null },
+      localStorage: window.localStorage,
+      onNavigate: jest.fn(),
+      PREVIOUS_LOCATION: '',
+      store: null,
+    });
+
+    expect(() => login.handleSubmitEmployee(new Event('submit'))).not.toThrow();
+  });
+
+  test("handleSubmitAdmin should not crash if form elements are missing", () => {
+    const login = new Login({
+      document: { querySelector: () => null },
+      localStorage: window.localStorage,
+      onNavigate: jest.fn(),
+      PREVIOUS_LOCATION: '',
+      store: null,
+    });
+
+    expect(() => login.handleSubmitAdmin(new Event('submit'))).not.toThrow();
+  });
+
+  test("login should store JWT token in localStorage on successful login", async () => {
+    const mockLogin = jest.fn().mockResolvedValue({ jwt: "mocked-jwt-token" });
+    const mockStore = { login: mockLogin };
+
+    const login = new Login({
+      document,
+      localStorage: window.localStorage,
+      onNavigate: jest.fn(),
+      PREVIOUS_LOCATION: '',
+      store: mockStore,
+    });
+
+    const user = { email: "test@test.com", password: "password" };
+    await login.login(user);
+
+    expect(window.localStorage.setItem).toHaveBeenCalledWith('jwt', 'mocked-jwt-token');
+  });
+
+  test("createUser should create a new user and login successfully", async () => {
+    const mockCreate = jest.fn().mockResolvedValue({});
+    const mockUsers = { create: mockCreate };
+    const mockStore = { users: () => mockUsers };
+    const mockLogin = jest.fn().mockResolvedValue({});
+    const login = new Login({
+      document,
+      localStorage: window.localStorage,
+      onNavigate: jest.fn(),
+      PREVIOUS_LOCATION: '',
+      store: mockStore,
+    });
+
+    login.login = mockLogin;
+
+    const user = { type: "Admin", email: "newuser@test.com", password: "password" };
+    await login.createUser(user);
+
+    expect(mockCreate).toHaveBeenCalled();
+    expect(mockLogin).toHaveBeenCalledWith(user);
   });
 });
