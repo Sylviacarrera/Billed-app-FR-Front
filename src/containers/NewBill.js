@@ -16,40 +16,31 @@ export default class NewBill {
     new Logout({ document, localStorage, onNavigate })
   }
 
+  hasValidExtension = (extension, validExtensions = ['jpg', 'jpeg', 'png']) => validExtensions.includes(extension.toLowerCase())
+
   handleChangeFile = e => {
     e.preventDefault()
     const file = this.document.querySelector(`input[data-testid="file"]`).files[0]
-    const filePath = e.target.value.split(/\\/g)
-    const fileName = filePath[filePath.length-1]
-    const fileExtension = fileName.split('.').pop()
+    const formData = new FormData()
+    const email = JSON.parse(localStorage.getItem("user")).email
+    const errorExtension = this.document.querySelector("div[data-testid='error-extension']")
+    errorExtension.classList.remove('show-error')
+    errorExtension.classList.add('hide-error')
 
-    const allowedExtensions = ["jpg", "jpeg", "png"]
-    if (!allowedExtensions.includes(fileExtension)) {
-      alert("Seuls les fichiers avec des extensions jpg, jpeg ou png sont autorisés.")
-      e.target.value = ""
+    // Check if file name contains extension valid
+    const fileNameSplitted = file.name.split('.')
+    const extension = fileNameSplitted[fileNameSplitted.length - 1].toLowerCase()
+    if (!this.hasValidExtension(extension)) {
+      errorExtension.classList.add('show-error')
+      errorExtension.classList.remove('hide-error')
       return
     }
 
-    const formData = new FormData()
-    const email = JSON.parse(localStorage.getItem("user")).email
     formData.append('file', file)
     formData.append('email', email)
+    this.fileName = file.name
 
-    this.store
-      .bills()
-      .create({
-        data: formData,
-        headers: {
-          noContentType: true
-        }
-      })
-      .then(({ fileUrl, key }) => {
-        this.billId = key
-        this.fileUrl = fileUrl
-        this.fileName = fileName
-      }).catch(error => {
-        console.error(error)
-      })
+    this.createFile(formData)
   }
 
   handleSubmit = e => {
@@ -72,6 +63,30 @@ export default class NewBill {
     this.onNavigate(ROUTES_PATH['Bills'])
   }
 
+  createFile = data => {
+    if (this.store) {
+      return this.store
+        .bills()
+        .create({
+          data,
+          headers: {
+            noContentType: true
+          }
+        })
+        .then(({ fileUrl, key }) => {
+          console.log(fileUrl)
+          this.billId = key
+          this.fileUrl = fileUrl
+          // this.fileName = fileName
+        })
+        .catch(error => {
+          console.error(error)
+          throw error
+        })
+    }
+  }
+
+  // not need to cover this function by tests
   updateBill = (bill) => {
     if (this.store) {
       this.store

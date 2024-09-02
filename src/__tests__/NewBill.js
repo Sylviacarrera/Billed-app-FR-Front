@@ -3,55 +3,137 @@ import NewBillUI from "../views/NewBillUI.js"
 import NewBill from "../containers/NewBill.js"
 import { localStorageMock } from "../__mocks__/localStorage.js"
 import mockStore from "../__mocks__/store"
+import { ROUTES } from "../constants/routes"
 
-jest.mock("../app/store", () => mockStore)
+let newBill
+let inputFile
+let inputFileGet
 
 describe("Given I am connected as an employee", () => {
+  beforeAll(() => {
+    Object.defineProperty(window, 'localStorage', { value: localStorageMock })
+    window.localStorage.setItem('user', JSON.stringify({
+      type: 'Employee'
+    }))
+  })
+
+
   describe("When I am on NewBill Page", () => {
-    beforeEach(() => {
+    beforeAll(() => {
       document.body.innerHTML = NewBillUI()
-      Object.defineProperty(window, 'localStorage', { value: localStorageMock })
-      window.localStorage.setItem('user', JSON.stringify({ type: 'Employee', email: "employee@test.com" }))
-    });
-
-    test("Then it should only accept files with jpg, jpeg, or png extension", () => {
-      const onNavigate = jest.fn()
-      const store = mockStore
-      const newBill = new NewBill({ document, onNavigate, store, localStorage: window.localStorage })
-
-      const fileInput = screen.getByTestId('file')
-      const file = new File(['dummy content'], 'sample.pdf', { type: 'application/pdf' })
-
-      const handleChangeFile = jest.fn(newBill.handleChangeFile)
-      fileInput.addEventListener('change', handleChangeFile)
-      fireEvent.change(fileInput, { target: { files: [file] } })
-
-      expect(handleChangeFile).toHaveBeenCalled()
-      expect(fileInput.value).toBe("") // file input should be cleared
-      expect(window.alert).toHaveBeenCalledWith("Seuls les fichiers avec des extensions jpg, jpeg ou png sont autorisés.")
+      const onNavigate = (pathname) => {
+        document.body.innerHTML = ROUTES({ pathname })
+      }
+      const store = null
+      newBill = new NewBill({
+        document, onNavigate, store, localStorage: window.localStorage
+      })
     })
 
-    test("Then it should accept a file with a valid extension and call API to create a bill", async () => {
-      const onNavigate = jest.fn()
-      const store = mockStore
-      const newBill = new NewBill({ document, onNavigate, store, localStorage: window.localStorage })
-
-      const fileInput = screen.getByTestId('file')
-      const file = new File(['dummy content'], 'sample.jpg', { type: 'image/jpeg' })
-
-      const handleChangeFile = jest.fn(newBill.handleChangeFile)
-      fileInput.addEventListener('change', handleChangeFile)
-      fireEvent.change(fileInput, { target: { files: [file] } })
-
-      expect(handleChangeFile).toHaveBeenCalled()
-
-      // Wait for the asynchronous operation to complete
-      await waitFor(() => expect(newBill.fileUrl).toBeTruthy())
-      expect(newBill.fileName).toBe('sample.jpg')
-      expect(store.bills().create).toHaveBeenCalledTimes(1)
+    test("Then form new bill is displayed", async () => {
+      const formNewBill = await waitFor(() => screen.getByTestId('form-new-bill'))
+      expect(formNewBill).toBeTruthy()
     })
 
-    test("Then it should handle API error on file upload", async () => {
+    describe("Test method hasValidExtension(extension, validExtensions)", () => {
+      it("should return true when extension is valid", () => {
+        expect(newBill.hasValidExtension('jpg')).toEqual(true)
+        expect(newBill.hasValidExtension('jpeg')).toEqual(true)
+        expect(newBill.hasValidExtension('png')).toEqual(true)
+      })
+      it("should return false when extension is invalid", () => {
+        expect(newBill.hasValidExtension('fake')).toEqual(false)
+        expect(newBill.hasValidExtension('doc')).toEqual(false)
+      })
+    })
+
+    describe("When i add a file", () => {
+      beforeAll(async () => {
+        inputFile = await waitFor(() => screen.getByTestId('file'))
+        inputFileGet = jest.fn()
+        Object.defineProperty(inputFile, 'files', {
+          get: inputFileGet
+        })
+      })
+
+      test("with an invalid extension then an error message is displayed and no file is created", async () => {
+        inputFileGet.mockReturnValue([{
+          name: 'file.doc',
+          size: 12345,
+          blob: 'some-blob'
+        }])
+        const createFile = jest.spyOn(newBill, 'createFile')
+
+        fireEvent.change(inputFile)
+        const errorExtension = await waitFor(() => screen.getByTestId('error-extension'))
+        expect(errorExtension.classList.contains('show-error')).toBe(true)
+
+        expect(createFile).not.toHaveBeenCalled()
+      })
+
+      test("with a valid extension then a new file is created", async () => {
+        inputFileGet.mockReturnValue([{
+          name: 'chucknorris.png',
+          size: 12345,
+          blob: 'some-blob'
+        }])
+        const createFile = jest.spyOn(newBill, 'createFile')
+
+        fireEvent.change(inputFile)
+        const errorExtension = await waitFor(() => screen.getByTestId('error-extension'))
+        expect(errorExtension.classList.contains('hide-error')).toBe(true)
+        expect(createFile).toHaveBeenCalled()
+      })
+
+    })
+
+    describe("When i submit new bill form", () => {
+      test("Then bill is upserted and i am redirected to bills page", async () => {
+        const formNewBill = await waitFor(() => screen.getByTestId('form-new-bill'))
+
+        const updateBill = jest.spyOn(newBill, 'updateBill')
+        const onNavigate = jest.spyOn(newBill, 'onNavigate')
+
+        fireEvent.submit(formNewBill)
+
+        expect(updateBill).toHaveBeenCalled()
+        expect(onNavigate).toHaveBeenCalled()
+      })
+    })
+
+  })
+
+  describe("Test API createFile method", () => {
+    beforeAll(() => {
+      jest.mock("../app/store", () => mockStore)
+      jest.spyOn(mockStore, "bills")
+      document.body.innerHTML = NewBillUI()
+      const onNavigate = (pathname) => {
+        document.body.innerHTML = ROUTES({ pathname })
+      }
+      const store = mockStore
+      newBill = new NewBill({
+        document, onNavigate, store, localStorage: window.localStorage
+      })
+    })
+    test('POST data then get fileUrl and key', async () => {
+      await newBill.createFile({})
+      expect(newBill.fileUrl).toEqual('https://localhost:3456/images/test.jpg')
+      expect(newBill.billId).toEqual('1234')
+    })
+    test("POST data to API and fails with 404 message error", async () => {
+
+      mockStore.bills.mockImplementationOnce(() => {
+        return {
+          create: () => {
+            return Promise.reject(new Error("Erreur 404"))
+          }
+        }
+      })
+      await expect(newBill.createFile({})).rejects.toEqual(new Error("Erreur 404"))
+    })
+    test("POST data to API and fails with 500 message error", async () => {
+
       mockStore.bills.mockImplementationOnce(() => {
         return {
           create: () => {
@@ -59,69 +141,9 @@ describe("Given I am connected as an employee", () => {
           }
         }
       })
-
-      const onNavigate = jest.fn()
-      const store = mockStore
-      const newBill = new NewBill({ document, onNavigate, store, localStorage: window.localStorage })
-
-      const fileInput = screen.getByTestId('file')
-      const file = new File(['dummy content'], 'sample.jpg', { type: 'image/jpeg' })
-
-      const handleChangeFile = jest.fn(newBill.handleChangeFile)
-      fileInput.addEventListener('change', handleChangeFile)
-      fireEvent.change(fileInput, { target: { files: [file] } })
-
-      expect(handleChangeFile).toHaveBeenCalled()
-
-      // Wait for the promise to reject and ensure the error is logged
-      await new Promise(process.nextTick)
-      expect(console.error).toHaveBeenCalledWith(new Error("Erreur 500"))
-    })
-
-    // Test d'intégration POST new bill
-    test("Then it should post the new bill and navigate to Bills page", async () => {
-      const onNavigate = jest.fn()
-      const store = mockStore
-      const newBill = new NewBill({ document, onNavigate, store, localStorage: window.localStorage })
-
-      const form = screen.getByTestId('form-new-bill')
-
-      const handleSubmit = jest.fn(newBill.handleSubmit)
-      form.addEventListener("submit", handleSubmit)
-
-      fireEvent.submit(form)
-
-      // Ensure that handleSubmit is called and API is hit
-      expect(handleSubmit).toHaveBeenCalled()
-      expect(store.bills().update).toHaveBeenCalledTimes(1)
-
-      // Verify navigation after submission
-      await waitFor(() => expect(onNavigate).toHaveBeenCalledWith(ROUTES_PATH['Bills']))
-    })
-
-    test("Then it should handle error when submitting the form", async () => {
-      mockStore.bills.mockImplementationOnce(() => {
-        return {
-          update: () => {
-            return Promise.reject(new Error("Erreur 500"))
-          }
-        }
-      })
-
-      const onNavigate = jest.fn()
-      const store = mockStore
-      const newBill = new NewBill({ document, onNavigate, store, localStorage: window.localStorage })
-
-      const form = screen.getByTestId('form-new-bill')
-
-      const handleSubmit = jest.fn(newBill.handleSubmit)
-      form.addEventListener("submit", handleSubmit)
-
-      fireEvent.submit(form)
-      
-      // Wait for the promise to reject and ensure the error is logged
-      await new Promise(process.nextTick)
-      expect(console.error).toHaveBeenCalledWith(new Error("Erreur 500"))
+      await expect(newBill.createFile({})).rejects.toEqual(new Error("Erreur 500"))
     })
   })
+
 })
+

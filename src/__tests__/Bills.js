@@ -2,7 +2,7 @@ import { screen, waitFor, fireEvent } from "@testing-library/dom"
 import BillsUI from "../views/BillsUI.js"
 import Bills from "../containers/Bills.js"
 import { bills } from "../fixtures/bills.js"
-import { ROUTES_PATH } from "../constants/routes.js"
+import { ROUTES, ROUTES_PATH } from "../constants/routes.js"
 import mockStore from "../__mocks__/store"
 import router from "../app/Router.js"
 import { localStorageMock } from "../__mocks__/localStorage.js"
@@ -60,6 +60,28 @@ describe("Given I am connected as an employee", () => {
       const iconEyes = await waitFor(() => screen.getAllByTestId('icon-eye'))
 
       expect(iconEyes.length).toEqual((await mockStore.bills().list()).length)
+    })
+
+    describe("When I click on 'new bill button'", () => {
+      test("Then i should be sent on New Bill page", async () => {
+        document.body.innerHTML = BillsUI({ data: bills })
+
+        const onNavigate = (pathname) => {
+          document.body.innerHTML = ROUTES({ pathname })
+        }
+        const store = null
+        const bill = new Bills({
+          document, onNavigate, store, bills, localStorage: window.localStorage
+        })
+
+        const buttonNewBill = screen.getByTestId('btn-new-bill')
+        const handleClickNewBill = jest.fn(e => bill.handleClickNewBill(e))
+        buttonNewBill.addEventListener('click', handleClickNewBill)
+        fireEvent.click(buttonNewBill)
+        expect(handleClickNewBill).toHaveBeenCalled()
+        const formNewBill = await waitFor(() => screen.getByTestId('form-new-bill'))
+        expect(formNewBill).toBeTruthy()
+      })
     })
 
     describe("When an error occurs on API", () => {
