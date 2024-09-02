@@ -68,9 +68,14 @@ export default class {
     this.document = document
     this.onNavigate = onNavigate
     this.store = store
+    this.bills = bills
+    this.localStorage = localStorage
+    this.counters = {}; // Initialiser le compteur pour chaque liste
+
     $('#arrow-icon1').click((e) => this.handleShowTickets(e, bills, 1))
     $('#arrow-icon2').click((e) => this.handleShowTickets(e, bills, 2))
     $('#arrow-icon3').click((e) => this.handleShowTickets(e, bills, 3))
+
     new Logout({ localStorage, onNavigate })
   }
 
@@ -127,20 +132,29 @@ export default class {
   }
 
   handleShowTickets(e, bills, index) {
-    const currentStatusContainer = $(`#status-bills-container${index}`)
-    const currentArrowIcon = $(`#arrow-icon${index}`)
-    
-    if (currentStatusContainer.html().trim() === "") {
-      currentArrowIcon.css({ transform: 'rotate(0deg)' })
-      currentStatusContainer.html(cards(filteredBills(bills, getStatus(index))))
-    } else {
-      currentArrowIcon.css({ transform: 'rotate(90deg)' })
-      currentStatusContainer.html("")
+    // Initialiser le compteur et l'index si ce n'est pas déjà fait
+    if (this.counters === undefined) {
+        this.counters = {};
+    }
+    if (this.counters[index] === undefined) {
+        this.counters[index] = 0;
     }
 
+    this.counters[index]++;
+
+    // Afficher ou cacher les tickets selon l'état du compteur
+    if (this.counters[index] % 2 !== 0) {
+        $(`#arrow-icon${index}`).css({ transform: 'rotate(0deg)' });
+        $(`#status-bills-container${index}`).html(cards(filteredBills(bills, getStatus(index))));
+    } else {
+        $(`#arrow-icon${index}`).css({ transform: 'rotate(90deg)' });
+        $(`#status-bills-container${index}`).html("");
+    }
+
+    // Ajouter les gestionnaires d'événements pour chaque ticket affiché
     bills.forEach(bill => {
-      $(`#open-bill${bill.id}`).click((e) => this.handleEditTicket(e, bill, bills))
-    })
+        $(`#open-bill${bill.id}`).off('click').on('click', (e) => this.handleEditTicket(e, bill, bills));
+    });
 
     return bills
   }
